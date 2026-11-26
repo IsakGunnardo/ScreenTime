@@ -35,7 +35,8 @@
         {
           "cameraPermission": "Appen använder kameran så att du kan fota din syssla som bevis."
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "scheme": "screentime"
   }

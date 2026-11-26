@@ -13,7 +13,7 @@ import type { Chore } from '@/lib/types';
 import { colors, fonts, radius, space } from '@/theme';
 
 export default function ChoreScreen() {
-  const { id, childId } = useLocalSearchParams<{ id: string; childId: string }>();
+  const { id } = useLocalSearchParams<{ id: string }>();
   const qc = useQueryClient();
   const [localUri, setLocalUri] = useState<string>();
   const [error, setError] = useState<string>();
@@ -27,7 +27,7 @@ export default function ChoreScreen() {
 
   const update = (c: Chore) => {
     qc.setQueryData(['chore', id], c);
-    qc.invalidateQueries({ queryKey: ['today', childId] });
+    qc.invalidateQueries({ queryKey: ['today'] });
     setError(undefined);
   };
   const onError = (e: Error) => setError(e.message);

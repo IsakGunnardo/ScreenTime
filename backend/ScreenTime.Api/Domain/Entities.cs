@@ -1,17 +1,42 @@
 namespace ScreenTime.Api.Domain;
 
-public class Child
+/// <summary>Allt i appen ägs av en familj. Föräldrar och barn ser bara sin egen familj.</summary>
+public class Family
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public required string Name { get; set; }
-    public required string AvatarEmoji { get; set; }
-    public required string Color { get; set; }
+
+    /// <summary>Kort kod barn använder för att logga in, och som en andra förälder använder för att gå med.</summary>
+    public required string JoinCode { get; set; }
 }
 
-/// <summary>Mall för en syssla som föräldern skapat.</summary>
+public class Parent
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid FamilyId { get; set; }
+    public Family Family { get; set; } = null!;
+    public required string Name { get; set; }
+    public required string Email { get; set; } // lagras i gemener
+    public string PasswordHash { get; set; } = "";
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public class Child
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid FamilyId { get; set; }
+    public Family Family { get; set; } = null!;
+    public required string Name { get; set; }
+    public required string AvatarEmoji { get; set; }
+    public required string Color { get; set; }
+    public string PinHash { get; set; } = "";
+}
+
+/// <summary>Mall för en syssla i en familj.</summary>
 public class Chore
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid FamilyId { get; set; }
     public required string Title { get; set; }
     public required string Emoji { get; set; }
     public string? Hint { get; set; }
@@ -62,6 +87,7 @@ public class ChoreInstance
     public string? ParentComment { get; set; }
     public DateTimeOffset? SubmittedAt { get; set; }
     public DateTimeOffset? DecidedAt { get; set; }
+    public Guid? DecidedByParentId { get; set; }
 }
 
 public enum Currency { Minutes, Coins, Xp }

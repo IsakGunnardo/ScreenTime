@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ErrorState, Screen } from '@/components/Screen';
 import { Pill, ProgressBar } from '@/components/ui';
 import { api } from '@/lib/api';
+import { useAuth, useMe } from '@/lib/auth';
 import type { Chore, ChoreStatus } from '@/lib/types';
 import { chunky, colors, fonts, radius, space } from '@/theme';
 
@@ -18,7 +19,8 @@ const statusBadge: Partial<Record<ChoreStatus, { text: string; bg: string; fg: s
 };
 
 export default function ChildHome() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id } = useMe();
+  const { signOut } = useAuth();
   const today = useQuery({ queryKey: ['today', id], queryFn: () => api.today(id) });
 
   useFocusEffect(
@@ -29,10 +31,10 @@ export default function ChildHome() {
   );
 
   if (today.isPending) {
-    return <Screen back><ActivityIndicator color={colors.primary} /></Screen>;
+    return <Screen><ActivityIndicator color={colors.primary} /></Screen>;
   }
   if (today.isError) {
-    return <Screen back><ErrorState message={today.error.message} onRetry={() => today.refetch()} /></Screen>;
+    return <Screen><ErrorState message={today.error.message} onRetry={() => today.refetch()} /></Screen>;
   }
 
   const { child, chores } = today.data;
@@ -40,7 +42,7 @@ export default function ChildHome() {
   const done = chores.filter((c) => c.status === 'Approved' || c.status === 'Rejected');
 
   return (
-    <Screen back refreshing={today.isRefetching} onRefresh={today.refetch}>
+    <Screen refreshing={today.isRefetching} onRefresh={today.refetch}>
       <LinearGradient colors={[child.color, colors.primary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
         <View style={styles.heroTop}>
           <View style={styles.avatarRing}>
@@ -75,26 +77,42 @@ export default function ChildHome() {
           <Text style={styles.allDoneText}>Alla uppdrag klara idag!</Text>
         </View>
       ) : (
-        open.map((c) => <QuestCard key={c.id} chore={c} childId={child.id} />)
+        open.map((c) => <QuestCard key={c.id} chore={c} />)
       )}
 
       {done.length > 0 ? (
         <>
           <Text style={styles.section}>Klart idag</Text>
-          {done.map((c) => <QuestCard key={c.id} chore={c} childId={child.id} />)}
+          {done.map((c) => <QuestCard key={c.id} chore={c} />)}
         </>
       ) : null}
+
+      <Pressable onPress={() => confirmSignOut(child.name, signOut)} accessibilityRole="button" style={styles.signOut}>
+        <Text style={styles.signOutText}>Byt användare</Text>
+      </Pressable>
     </Screen>
   );
 }
 
-function QuestCard({ chore, childId }: { chore: Chore; childId: string }) {
+function confirmSignOut(name: string, signOut: () => Promise<void>) {
+  const message = `Logga ut ${name}? Du behöver din PIN för att komma in igen.`;
+  if (Platform.OS === 'web') {
+    if (globalThis.confirm?.(message)) signOut();
+    return;
+  }
+  Alert.alert('Byt användare', message, [
+    { text: 'Avbryt', style: 'cancel' },
+    { text: 'Logga ut', style: 'destructive', onPress: () => signOut() },
+  ]);
+}
+
+function QuestCard({ chore }: { chore: Chore }) {
   const badge = statusBadge[chore.status];
   const finished = chore.status === 'Approved' || chore.status === 'Rejected';
   return (
     <Pressable
       disabled={finished}
-      onPress={() => router.push({ pathname: '/chore/[id]', params: { id: chore.id, childId } })}
+      onPress={() => router.push({ pathname: '/child/chore/[id]', params: { id: chore.id } })}
       accessibilityRole="button"
       accessibilityLabel={`${chore.title}, ${chore.minutes} minuter${badge ? `, ${badge.text}` : ''}`}
       style={({ pressed }) => [
@@ -159,6 +177,8 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.pill },
   badgeText: { fontFamily: fonts.bodyBold, fontSize: 12 },
   go: { fontFamily: fonts.displayBold, fontSize: 30, color: colors.primary, paddingHorizontal: 4 },
+  signOut: { alignSelf: 'center', padding: space(3), marginTop: space(4) },
+  signOutText: { fontFamily: fonts.body, fontSize: 14, color: colors.inkSoft, textDecorationLine: 'underline' },
   allDone: { alignItems: 'center', gap: space(2), padding: space(6), backgroundColor: colors.mintSoft, borderRadius: radius.lg },
   allDoneText: { fontFamily: fonts.displayBold, fontSize: 19, color: colors.mintDeep },
 });
