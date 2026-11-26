@@ -7,7 +7,30 @@ app/       Expo / React Native (TypeScript, expo-router)
 backend/   .NET 10 Web API (C#, EF Core + SQLite)
 ```
 
-## Kom igång
+## Snabbstart (rekommenderas)
+
+Kräver bara **Docker Desktop** (igång) och **Node.js**. .NET behöver inte vara installerat, eftersom backend byggs i containern.
+
+```bash
+./start.sh
+```
+
+Skriptet:
+1. frågar efter din Anthropic-nyckel första gången och sparar den i `.env` (ignoreras av git)
+2. bygger och startar backend i Docker på port 5080 (startar om automatiskt om Macen startas om)
+3. skriver ut adressen på nätverket, t.ex. `http://192.168.1.20:5080`
+4. startar Expo, och sedan skannar du QR-koden med Expo Go
+
+| Kommando | Vad |
+|---|---|
+| `./start.sh --backend-only` | Bara backend |
+| `./stop.sh` | Stoppa (data finns kvar) |
+| `./stop.sh --reset` | Stoppa och radera all data |
+| `docker compose logs -f api` | Följ backend-loggen |
+
+Datan (databas, foton, signeringsnyckel) ligger i Docker-volymen `screentime-data` och överlever omstarter och ombyggen.
+
+## Manuell start (utan Docker)
 
 ### 1. Backend
 

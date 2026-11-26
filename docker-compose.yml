@@ -1,0 +1,17 @@
+services:
+  api:
+    build: ./backend
+    image: screentime-api
+    container_name: screentime-api
+    restart: unless-stopped
+    ports:
+      - "5080:5080"
+    environment:
+      # Läses från .env (skapas av start.sh). Tom nyckel = AI-koll avstängd.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - screentime-data:/app/data
+
+volumes:
+  # Databas, foton och signeringsnyckel överlever omstarter och ombyggen.
+  screentime-data:
