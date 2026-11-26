@@ -92,7 +92,9 @@ export const api = {
   children: () => request<ChildSummary[]>('/api/family/children'),
   addChild: (b: { name: string; avatar: string; color: string; pin: string }) =>
     post<ChildSummary>('/api/family/children', b),
-  setPin: (childId: string, pin: string) => send<void>('PUT', `/api/family/children/${childId}/pin`, { pin }),
+  updateChild: (childId: string, b: { name: string; avatar: string; color: string; pin?: string }) =>
+    send<ChildSummary>('PUT', `/api/family/children/${childId}`, b),
+  deleteChild: (childId: string) => request<void>(`/api/family/children/${childId}`, { method: 'DELETE' }),
 
   // Uppdrag
   config: () => request<{ aiEnabled: boolean }>('/api/config'),

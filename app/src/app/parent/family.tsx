@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { Field, FormError } from '@/components/Field';
 import { Screen } from '@/components/Screen';
 import { Body, Button, Card, H1 } from '@/components/ui';
@@ -46,7 +46,7 @@ export default function FamilyScreen() {
       {kids.data?.length === 0 && !adding ? <Body>Inga barn tillagda än.</Body> : null}
 
       {adding ? (
-        <AddChildForm onDone={() => setAdding(false)} />
+        <ChildForm onDone={() => setAdding(false)} />
       ) : (
         <Button label="Lägg till barn" icon="➕" onPress={() => setAdding(true)} />
       )}
@@ -67,14 +67,8 @@ export default function FamilyScreen() {
 
 function KidRow({ kid }: { kid: ChildSummary }) {
   const [editing, setEditing] = useState(false);
-  const [pin, setPin] = useState('');
-  const save = useMutation({
-    mutationFn: () => api.setPin(kid.id, pin),
-    onSuccess: () => {
-      setEditing(false);
-      setPin('');
-    },
-  });
+
+  if (editing) return <ChildForm kid={kid} onDone={() => setEditing(false)} />;
 
   return (
     <Card style={{ gap: space(3) }}>
@@ -88,43 +82,59 @@ function KidRow({ kid }: { kid: ChildSummary }) {
             Nivå {kid.level} · ⏱️ {kid.minutes} min · 🪙 {kid.coins} · 🔥 {kid.streak}
           </Text>
         </View>
-        <Pressable onPress={() => setEditing((e) => !e)} accessibilityRole="button" hitSlop={8}>
-          <Text style={styles.link}>{editing ? 'Avbryt' : 'Ny PIN'}</Text>
+        <Pressable
+          onPress={() => setEditing(true)}
+          accessibilityRole="button"
+          accessibilityLabel={`Redigera ${kid.name}`}
+          hitSlop={8}
+          style={styles.editBtn}
+        >
+          <Text style={styles.link}>✏️ Ändra</Text>
         </Pressable>
       </View>
-      {editing ? (
-        <>
-          <Field
-            label={`Ny PIN för ${kid.name}`}
-            value={pin}
-            onChangeText={(t) => setPin(t.replace(/\D/g, '').slice(0, 4))}
-            keyboardType="number-pad"
-            maxLength={4}
-            placeholder="4 siffror"
-          />
-          <FormError message={save.error?.message} />
-          <Button label="Spara PIN" variant="mint" disabled={!isPin(pin)} loading={save.isPending} onPress={() => save.mutate()} />
-        </>
-      ) : null}
-      {save.isSuccess && !editing ? <Text style={styles.saved}>✓ PIN uppdaterad</Text> : null}
     </Card>
   );
 }
 
-function AddChildForm({ onDone }: { onDone: () => void }) {
+function confirmDelete(name: string, onYes: () => void) {
+  const message = `Ta bort ${name}? Alla uppdrag, all intjänad tid och alla bilder för ${name} raderas. Det går inte att ångra.`;
+  if (Platform.OS === 'web') {
+    if (globalThis.confirm?.(message)) onYes();
+    return;
+  }
+  Alert.alert('Ta bort barn', message, [
+    { text: 'Avbryt', style: 'cancel' },
+    { text: 'Ta bort', style: 'destructive', onPress: onYes },
+  ]);
+}
+
+/** Används både för att lägga till (utan kid) och redigera (med kid). */
+function ChildForm({ kid, onDone }: { kid?: ChildSummary; onDone: () => void }) {
   const qc = useQueryClient();
-  const [name, setName] = useState('');
-  const [avatar, setAvatar] = useState(AVATARS[0]);
-  const [color, setColor] = useState(COLORS[0]);
+  const isEdit = !!kid;
+  const [name, setName] = useState(kid?.name ?? '');
+  const [avatar, setAvatar] = useState(kid?.avatar ?? AVATARS[0]);
+  const [color, setColor] = useState(kid?.color ?? COLORS[0]);
   const [pin, setPin] = useState('');
 
-  const add = useMutation({
-    mutationFn: () => api.addChild({ name, avatar, color, pin }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['kids'] });
-      onDone();
-    },
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['kids'] });
+    qc.invalidateQueries({ queryKey: ['queue'] });
+    onDone();
+  };
+
+  const save = useMutation({
+    mutationFn: () =>
+      isEdit
+        ? api.updateChild(kid.id, { name, avatar, color, pin: pin || undefined })
+        : api.addChild({ name, avatar, color, pin }),
+    onSuccess: refresh,
   });
+  const remove = useMutation({ mutationFn: () => api.deleteChild(kid!.id), onSuccess: refresh });
+
+  const pinOk = isEdit ? pin === '' || isPin(pin) : isPin(pin);
+  // Visa även avatarer som inte finns i listan (t.ex. sparade tidigare).
+  const avatarChoices = AVATARS.includes(avatar) ? AVATARS : [avatar, ...AVATARS];
 
   return (
     <Card style={{ gap: space(4) }}>
@@ -140,7 +150,7 @@ function AddChildForm({ onDone }: { onDone: () => void }) {
       <View style={{ gap: 6 }}>
         <Text style={styles.fieldLabel}>Avatar</Text>
         <View style={styles.wrap}>
-          {AVATARS.map((a) => (
+          {avatarChoices.map((a) => (
             <Pressable
               key={a}
               onPress={() => setAvatar(a)}
@@ -171,18 +181,34 @@ function AddChildForm({ onDone }: { onDone: () => void }) {
       </View>
 
       <Field
-        label="PIN-kod"
+        label={isEdit ? 'Ny PIN-kod (valfritt)' : 'PIN-kod'}
         value={pin}
         onChangeText={(t) => setPin(t.replace(/\D/g, '').slice(0, 4))}
         keyboardType="number-pad"
         maxLength={4}
         placeholder="4 siffror"
-        hint="Barnet använder koden för att logga in. Du kan byta den senare."
+        hint={isEdit ? 'Lämna tomt för att behålla nuvarande PIN.' : 'Barnet använder koden för att logga in. Du kan byta den senare.'}
       />
 
-      <FormError message={add.error?.message} />
-      <Button label="Spara" variant="mint" disabled={!name.trim() || !isPin(pin)} loading={add.isPending} onPress={() => add.mutate()} />
-      <Button label="Avbryt" variant="ghost" onPress={onDone} />
+      <FormError message={save.error?.message ?? remove.error?.message} />
+      <Button
+        label={isEdit ? 'Spara ändringar' : 'Spara'}
+        variant="mint"
+        disabled={!name.trim() || !pinOk || remove.isPending}
+        loading={save.isPending}
+        onPress={() => save.mutate()}
+      />
+      <Button label="Avbryt" variant="ghost" disabled={save.isPending || remove.isPending} onPress={onDone} />
+      {isEdit ? (
+        <Button
+          label={`Ta bort ${kid.name}`}
+          icon="🗑️"
+          variant="danger"
+          loading={remove.isPending}
+          disabled={save.isPending}
+          onPress={() => confirmDelete(kid.name, () => remove.mutate())}
+        />
+      ) : null}
     </Card>
   );
 }
@@ -196,7 +222,7 @@ const styles = StyleSheet.create({
   kidName: { fontFamily: fonts.bodyBold, fontSize: 18, color: colors.ink },
   kidMeta: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft },
   link: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.primary },
-  saved: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.mintDeep },
+  editBtn: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: radius.sm, backgroundColor: colors.primarySoft },
   fieldLabel: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.ink },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space(2) },
   choice: {
